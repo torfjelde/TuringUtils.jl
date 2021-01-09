@@ -1,6 +1,11 @@
 import ComponentArrays
 
+"""
+    namedtuple(vi::DynamicPPL.TypedVarInfo)
 
+Similar to `DynamicPPL.tonamedtuple` but values of return-value are only the values
+of the different variables rather than a tuple of values and symbols.
+"""
 namedtuple(vi::DynamicPPL.TypedVarInfo) = _namedtuple(vi.metadata)
 @generated function _namedtuple(metadata::NamedTuple{names}, start = 0) where {names}
     expr = Expr(:tuple)
@@ -12,7 +17,23 @@ namedtuple(vi::DynamicPPL.TypedVarInfo) = _namedtuple(vi.metadata)
     return :(NamedTuple{$names}($expr))
 end
 
+# Constructor for `ComponentArray` from a `VarInfo`
+function ComponentArrays.ComponentArray(varinfo::DynamicPPL.VarInfo)
+    return _tocomponentarray(varinfo.metadata)
+end
+
+function ComponentArrays.ComponentArray(varinfo::DynamicPPL.Model)
+    varinfo = DynamicPPL.VarInfo(model)
+    return ComponentArrays.ComponentArray(varinfo)
+end
+
 @generated function _tocomponentarray(metadata::NamedTuple{names}) where {names}
+    # Adapted from https://github.com/TuringLang/DynamicPPL.jl/blob/873d5e94fe778514d52e24338a3cd1bd0535eefa/src/varinfo.jl#L338-L348
+    # and thus ought should allow usage such as
+    #
+    #    varinfo[sampler] .= ComponentArrays.getdata(ComponentArray(varinfo))
+    #
+    # i.e. have the same order as `varinfo[sampler]`.
     ranges = Expr(:tuple)
     expr = Expr(:vcat)
     start = :(1)
@@ -29,18 +50,6 @@ end
         ax = $(ComponentArrays).Axis(NamedTuple{$names}($ranges))
         return $(ComponentArrays).ComponentArray($expr, ax)
     end
-end
-
-# Constructor for `ComponentArray` from a `VarInfo`
-function ComponentArrays.ComponentArray(varinfo::DynamicPPL.VarInfo)
-    return _tocomponentarray(varinfo.metadata)
-end
-
-
-# Constructor for `ComponentArray` from a `DynamicPPL.Model`
-function ComponentArrays.ComponentArray(varinfo::DynamicPPL.Model)
-    varinfo = DynamicPPL.VarInfo(model)
-    return ComponentArrays.ComponentArray(varinfo)
 end
 
 # Make it so that `NamedBijector` is compatible with `ComponentArray`
