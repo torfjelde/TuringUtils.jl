@@ -32,7 +32,7 @@ struct Stacked2{Bs, Rs} <: Bijectors.Bijector{1}
     ranges::Rs
 end
 
-Base.inv(sb::Stacked) = Stacked2(map(Base.inv, sb.bs), sb.ranges)
+Base.inv(sb::Stacked2) = Stacked2(map(Base.inv, sb.bs), sb.ranges)
 
 function (sb::Stacked2{<:AbstractArray})(x::AbstractVector{<:Real})
     n = length(sb.ranges)
