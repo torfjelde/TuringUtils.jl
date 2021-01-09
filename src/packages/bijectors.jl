@@ -29,7 +29,7 @@ Base.inv(sb::Stacked) = Stacked2(map(Base.inv, sb.bs), sb.ranges)
 
 function (sb::Stacked2{<:AbstractArray})(x::AbstractVector{<:Real})
     n = length(sb.ranges)
-    y = Bijectors.mapvcat(1:n) do i
+    y = mapreduce(vcat, 1:n) do i
         sb.bs[i](x[sb.ranges[i]])
     end
     @assert size(y) == size(x) "x is size $(size(x)) but y is $(size(y))"
@@ -41,11 +41,7 @@ function Bijectors.logabsdetjac(
     x::AbstractVector{<:Real}
 )
     n = length(b.ranges)
-    init = sum(logabsdetjac(b.bs[1], x[b.ranges[1]]))
-
-    n == 1 && return init
-    
-    init + sum(2:n) do i
+    return mapreduce(sum, 1:n) do i
         sum(logabsdetjac(b.bs[i], x[b.ranges[i]]))
     end
 end
