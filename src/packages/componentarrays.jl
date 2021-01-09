@@ -1,14 +1,41 @@
 import ComponentArrays
 
+
+namedtuple(vi::DynamicPPL.TypedVarInfo) = _namedtuple(vi.metadata)
+@generated function _namedtuple(metadata::NamedTuple{names}, start = 0) where {names}
+    expr = Expr(:tuple)
+    start = :(1)
+    for f in names
+        length = :(length(metadata.$f.vals))
+        push!(expr.args, :(metadata.$f.vals[1:$length]))
+    end
+    return :(NamedTuple{$names}($expr))
+end
+
+@generated function _tocomponentarray(metadata::NamedTuple{names}) where {names}
+    ranges = Expr(:tuple)
+    expr = Expr(:vcat)
+    start = :(1)
+    for f in names
+        length = :(length(metadata.$f.vals))
+        finish = :($start + $length - 1)
+        r = :($start:$finish)
+        push!(ranges.args, r)
+        push!(expr.args, :(metadata.$f.vals[1:$length]))
+        start = :($start + $length)
+    end
+    
+    return quote
+        ax = $(ComponentArrays).Axis(NamedTuple{$names}($ranges))
+        return $(ComponentArrays).ComponentArray($expr, ax)
+    end
+end
+
 # Constructor for `ComponentArray` from a `VarInfo`
 function ComponentArrays.ComponentArray(varinfo::DynamicPPL.VarInfo)
-    # TODO: this should give the right ordering, but maybe it would
-    # be better to do the same as is done in `DynamicPPL.setall!` just to be sure?
-    nt = map(DynamicPPL.tonamedtuple(varinfo)) do (vals, syms)
-        vals
-    end
-    return ComponentArrays.ComponentArray(nt)
+    return _tocomponentarray(varinfo.metadata)
 end
+
 
 # Constructor for `ComponentArray` from a `DynamicPPL.Model`
 function ComponentArrays.ComponentArray(varinfo::DynamicPPL.Model)
