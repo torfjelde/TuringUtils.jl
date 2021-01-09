@@ -1,0 +1,9 @@
+name = "TuringUtils"
+uuid = "5eca0922-168d-4ac7-867c-11261f9b792b"
+authors = ["Tor Erlend Fjelde <tor.erlend95@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+Bijectors = "76274a88-744f-5084-9051-94815aaf08c4"
+ComponentArrays = "b0b7db55-cfe3-40fc-9ded-d10e2dbeff66"
+DynamicPPL = "366bfd00-2699-11ea-058f-f148b4cae6d8"
