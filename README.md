@@ -1,7 +1,7 @@
 # TuringUtils.jl
 My playground for hacks for Turing.jl and related packages.
 
-## Current stuff
+## `ComponentArrays.jl`
 Now we can do stuff like:
 
 ```julia
