@@ -1,4 +1,4 @@
-# TuringUtils
+# TuringUtils.jl
 My playground for hacks for Turing.jl and related packages.
 
 ## Current stuff
