@@ -2,6 +2,13 @@ Base.names(::DynamicPPL.VarInfo{<:NamedTuple{names}}) where {names} = names
 Base.names(::Type{<:DynamicPPL.VarInfo{<:NamedTuple{names}}}) where {names} = names
 
 
+"""
+    bijector(varinfo::DynamicPPL.VarInfo)
+
+Returns a `NamedBijector` which can transform different variants of `varinfo`.
+
+E.g. `ComponentArrays.ComponentArray(varinfo)`, `namedtuple(varinfo)`.
+"""
 @generated function Bijectors.bijector(varinfo::DynamicPPL.TypedVarInfo)
     names = Base.names(varinfo)
     
