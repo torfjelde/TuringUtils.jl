@@ -53,30 +53,30 @@ end
 end
 
 # Make it so that `NamedBijector` is compatible with `ComponentArray`
+vec_mby(x) = x
+vec_mby(x::Real) = [x]
+vec_mby(x::AbstractArray) = vec(x)
+
 @generated function (b::Bijectors.NamedBijector{names1})(
     x::ComponentArrays.ComponentVector
 ) where {names1}
     ax = first(ComponentArrays.getaxes(x))
     indexmap = ComponentArrays.indexmap(ax)
 
-    rs = Expr(:tuple)
-    bs = []
+    expr = Expr(:call, :vcat)
     for (k, v) in pairs(indexmap)
-        push!(rs.args, :($v))
         if k in names1
-            push!(bs, :(b.bs[$(QuoteNode(k))]))
+            push!(expr.args, :(vec_mby(b.bs.$k(x.$k))))
         else
-            push!(bs, :(Identity{1}()))
+            push!(expr.args, :(vec_mby(x.$k)))
         end
     end
 
     # Re-uses the implementation for `Stacked`, thus acting directly on the vector
     # rather than accessing the fields via the named fields.
-    return quote
-        y = $(Bijectors)._transform(ComponentArrays.getdata(x), $(rs), $(bs...))
-        return $(ComponentArrays).ComponentArray(y, $(ax))
-    end
+    return :(ComponentArrays.ComponentArray($expr, $ax))
 end
+
 
 # Just works, but impl in Bijectors.jl unnecessarily specializes on `x::NamedTuple`
 @generated function Bijectors.logabsdetjac(b::Bijectors.NamedBijector{names}, x) where {names}
