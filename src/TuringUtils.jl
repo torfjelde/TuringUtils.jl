@@ -5,6 +5,7 @@ import Bijectors
 using DynamicPPL: DynamicPPL
 using Turing: Turing
 using MCMCChains: MCMCChains
+using AbstractMCMC: AbstractMCMC
 
 using Random: Random
 using ProgressMeter: ProgressMeter
