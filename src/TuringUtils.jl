@@ -36,7 +36,7 @@ function fast_generated_quantities(model::DynamicPPL.Model, chain::DynamicPPL.Ab
     iters = MCMCChainsUtils.NamedTupleChainIterator(
         keys(varinfo.metadata),
         chain,
-        MCMCChains.getconverters(chain)
+        MCMCChainsUtils.getconverters(chain)
     )
 
     pm = ProgressMeter.Progress(length(iters))
