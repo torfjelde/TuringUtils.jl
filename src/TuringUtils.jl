@@ -3,7 +3,10 @@ module TuringUtils
 import Bijectors
 import DynamicPPL
 
-export NamedTupleChainIterator
+export NamedTupleChainIterator,
+    # Modules
+    MCMCChainsUtils,
+    DynamicPPLUtils
 
 include("packages/componentarrays.jl")
 include("packages/bijectors.jl")
