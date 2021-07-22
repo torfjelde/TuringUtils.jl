@@ -1,4 +1,5 @@
 module MCMCChainsUtils
+
 using MCMCChains: MCMCChains
 
 export NamedTupleChainIterator
@@ -177,15 +178,19 @@ struct NamedTupleChainIterator{names,It}
     end
 end
 
-function NamedTupleChainIterator(names, chains, converters)
-    return NamedTupleChainIterator{names}(chains, converters)
-end
 function NamedTupleChainIterator(chains; converters...)
     NamedTupleChainIterator((get_groups(chains)...,), chains; converters...)
 end
 function NamedTupleChainIterator(names, chains; converters...)
     return NamedTupleChainIterator(names, chains, (; converters...))
 end
+function NamedTupleChainIterator(names, chains, converters::NamedTuple{()})
+    return NamedTupleChainIterator{names}(chains, getconverters(chains))
+end
+function NamedTupleChainIterator(names, chains, converters)
+    return NamedTupleChainIterator{names}(chains, converters)
+end
+
 
 Base.keys(::NamedTupleChainIterator{names}) where {names} = names
 
