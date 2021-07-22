@@ -237,7 +237,7 @@ function fast_generated_quantities(model::DynamicPPL.Model, chain::DynamicPPL.Ab
     pm = ProgressMeter.Progress(length(iters))
 
     results = map(iters) do nt
-        TuringUtils.fast_setval_and_resample!!(varinfo, nt)
+        fast_setval_and_resample!!(varinfo, nt)
         result = model(varinfo)
 
         ProgressMeter.next!(pm)
@@ -311,7 +311,7 @@ function fast_transitions_from_chain(
 
     transitions = map(iters) do nt
         # Set variables present in `chain` and mark those NOT present in chain to be resampled.
-        TuringUtils.fast_setval_and_resample!!(varinfo, nt)
+        fast_setval_and_resample!!(varinfo, nt)
         model(rng, varinfo, sampler)
 
         # Convert `VarInfo` into `NamedTuple` and save.
