@@ -26,6 +26,12 @@ end
 #################################
 # Adding converters to `Chains` #
 #################################
+"""
+    getconverters(chain)
+
+Return `chain.info.converters` if the field exists, otherwise
+`NamedTuple()` is returned.
+"""
 function getconverters(chain::MCMCChains.Chains)
     return if haskey(chain.info, :converters)
         chain.info.converters
@@ -34,11 +40,34 @@ function getconverters(chain::MCMCChains.Chains)
     end
 end
 
+"""
+    setconverters(chain::MCMCChains.Chains; converters...)
+    setconverters(chain::MCMCChains.Chains, converters::NamedTuple)
+
+Set `chain.info.converter` to `converters` and return the resulting `chain`.
+"""
 setconverters(chain::MCMCChains.Chains; converters...) = setconverters(chain, (; converters...))
 function setconverters(chain::MCMCChains.Chains, converters)
     return MCMCChains.setinfo(chain, merge(chain.info, (converters=converters, )))
 end
 
+"""
+    setconverters(chain::MCMCChains.Chains, model::DynamicPPL.Model)
+
+Set `chain.info.converter` to the converters corresponding to `model`,
+assuming the `:parameter` section in `chain` corresponds to a chain
+obtained from sampling fom `model`.
+
+This needs to be implemented on a per-model basis, i.e. there's no
+default implementation. To correctly dispatch on a model without
+instantiation, see [`DynamicPPLUtils.evaluatortype`](@ref).
+
+(!!!) Ordering of variables matters! Hence the converters are not guaranteed
+to produce the correct results for a `chain` with the same parameters as those
+which would have been produced by `model` unless the ordering of the variables is
+also correct.
+"""
+setconverters
 
 #############################
 # `NamedTupleChainIterator` #
