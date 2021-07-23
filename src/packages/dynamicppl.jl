@@ -22,6 +22,40 @@ function replace_args(m::Model; kwargs...)
     return Model(m.name, m.f, deepcopy(merge(m.args, kwargs)), deepcopy(m.defaults))
 end
 
+###############################
+# Allow dispatching on models #
+###############################
+"""
+    evaluatortype(f)
+    evaluatortype(f, nargs)
+    evaluatortype(f, argtypes)
+    evaluatortype(m::DynamicPPL.Model)
+
+Returns the evaluator-type for model `m` or a model-constructor `f`.
+
+(!!!) Does not work well with Revise.jl since redefinition of the model
+will not necessaril trigger a re-evaluation of `evaluatortype`.
+"""
+function evaluatortype(f, argtypes)
+    rets = Core.Compiler.return_types(f, argtypes)
+    if (length(rets) != 1) || !(first(rets) <: DynamicPPL.Model)
+        error("inferred return-type of $(f) using $(argtypes) is not `Model`; please specify argument types")
+    end
+    # Extract the anonymous evaluator.
+    return first(rets).parameters[1]
+end
+evaluatortype(f, nargs::Int) = evaluatortype(f, ntuple(_ -> Missing, nargs))
+function evaluatortype(f)
+    m = first(methods(f))
+    # Extract the arguments (first element is the method itself).
+    nargs = length(m.sig.parameters) - 1
+
+    return evaluatortype(f, nargs)
+end
+evaluatortype(::DynamicPPL.Model{F}) where {F} = F
+
+evaluator(m::DynamicPPL.Model) = m.f
+
 #############################################
 # Fast `setval!` and `setval_and_resample!` #
 #############################################
