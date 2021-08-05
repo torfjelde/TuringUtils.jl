@@ -1,6 +1,16 @@
 Base.names(::DynamicPPL.VarInfo{<:NamedTuple{names}}) where {names} = names
 Base.names(::Type{<:DynamicPPL.VarInfo{<:NamedTuple{names}}}) where {names} = names
 
+Base.@kwdef struct BijectorStructureOptions
+    static_parameters::Bool=true
+    static_structure::Bool=true
+    unvectorize_univariates::Bool=false
+end
+
+unvectorize_univariates(options::BijectorStructureOptions) = options.unvectorize_univariates
+use_static_parameters(options::BijectorStructureOptions) = options.static_parameters
+use_static_structure(options::BijectorStructureOptions) = options.static_structure
+
 
 """
     bijector(varinfo::DynamicPPL.VarInfo)
@@ -9,18 +19,18 @@ Returns a `NamedBijector` which can transform different variants of `varinfo`.
 
 E.g. `ComponentArrays.ComponentArray(varinfo)`, `namedtuple(varinfo)`.
 """
-@generated function Bijectors.bijector(varinfo::DynamicPPL.TypedVarInfo; tuplify = false)
+function Bijectors.bijector(varinfo::DynamicPPL.TypedVarInfo; tuplify=false)
+    return Bijectors.bijector(varinfo, BijectorStructureOptions(tuplify, true, false))
+end
+@generated function Bijectors.bijector(
+    varinfo::DynamicPPL.TypedVarInfo,
+    options::BijectorStructureOptions=BijectorStructureOptions()
+)
     names = Base.names(varinfo)
     
     expr = Expr(:tuple)
     for n in names
-        e = quote
-            if tuplify
-                $(Bijectors.Stacked)(map($(Bijectors).bijector, tuple(md.$n.dists...)), md.$n.ranges)
-            else
-                $(Bijectors.Stacked)(map($(Bijectors).bijector, md.$n.dists), md.$n.ranges)
-            end
-        end
+        e = :(bijector_from_metadata(md.$n; options))
         push!(expr.args, e)
     end
 
@@ -31,6 +41,40 @@ E.g. `ComponentArrays.ComponentArray(varinfo)`, `namedtuple(varinfo)`.
     end
 end
 
+function bijector_from_metadata(md::DynamicPPL.Metadata; options=BijectorStructureOptions())
+    b = Bijectors.Stacked(map(Bijectors.bijector, md.dists), md.ranges)
+    return if (
+        # Number of dists should be 1 and that should be a univariate.
+        (length(md.dists[1]) == 1 && md.dists[1] isa Bijectors.UnivariateDistribution) &&
+        # Number of bijectors and ranges should be 1.
+        (length(b.bs) == 1 && length(first(b.ranges)) == 1) &&
+        # We only want to unvectorize if it's indeed represented by a symbol,
+        # not some indexing expression, e.g. `x` is cool, `x[1]` is not.
+        (length(md.vns) == 1 && md.vns[1].indexing === ())
+    )
+        first(b.bs)
+    elseif length(md.dists) == 1
+        if Bijectors.dimension(b.bs[1]) == 0
+            Bijectors.up1(b.bs[1])
+        else
+            b.bs[1]
+        end
+    else
+        b
+    end
+end
+
+function unvectorize_univariate_maybe(md::DynamicPPL.Metadata, b::Bijectors.Stacked)
+    # Number of dists should be 1 and that should be a univariate.
+    (length(md.dists[1]) == 1 && md.dists[1] isa Bijectors.UnivariateDistribution) || return b
+    # Number of bijectors and ranges should be 1.
+    (length(b.bs) == 1 && length(first(b.ranges)) == 1) || return b
+    # We only want to unvectorize if it's indeed represented by a symbol,
+    # not some indexing expression, e.g. `x` is cool, `x[1]` is not.
+    (length(md.vns) == 1 && md.vns[1].indexing === ()) || return b
+
+    return first(b.bs)
+end
 
 #####################################################
 ### Try to optimize the structure of the bijector ###
@@ -39,12 +83,12 @@ iscontiguous(left, right) = maximum(left) + 1 == minimum(right)
 
 Bijectors.up1(b::Bijectors.Stacked) = b
 
-optimize_bijector(b) = b
-optimize_bijector(ib::Bijectors.Inverse) = inv(optimize_bijector(ib.orig))
+optimize_bijector_structure(b; options=BijectorStructureOptions()) = b
+optimize_bijector_structure(ib::Bijectors.Inverse; kwargs...) = inv(optimize_bijector_structure(ib.orig; kwargs...))
 
-function optimize_bijector(b::Bijectors.NamedBijector{names}) where {names}
+function optimize_bijector_structure(b::Bijectors.NamedBijector{names}; kwargs...) where {names}
     bs = map(b.bs) do b
-        optimize_bijector(b)
+        optimize_bijector_structure(b; kwargs...)
     end
     return Bijectors.NamedBijector(NamedTuple{names}(bs))
 end
@@ -52,7 +96,16 @@ end
 # TODO: Maybe also handle the same cases as the evaluation of `TruncatedBijector`,
 # e.g. `Bijectors.Log{N}() ∘ Bijectors.Scale{N}(-lb)` if `all(isfinite.(lb))` i.e.
 # is lowerbounded.
-function optimize_bijector(b::Bijectors.TruncatedBijector{N}) where {N}
+function optimize_bijector_structure(
+    b::Bijectors.TruncatedBijector{N};
+    options=BijectorStructureOptions()
+) where {N}
+    # If we're not assuming static parameters, then there's nothing we can do here
+    # and so we just return immediately.
+    if !use_static_parameters(options)
+        return b
+    end
+
     lb, ub = b.lb, b.ub
     return if all(iszero.(lb)) && all(isinf.(ub))
         Bijectors.Log{N}()
@@ -63,7 +116,7 @@ function optimize_bijector(b::Bijectors.TruncatedBijector{N}) where {N}
     end
 end
 
-function optimize_bijector(b::Bijectors.Stacked)
+function optimize_bijector_structure(b::Bijectors.Stacked; options=BijectorStructureOptions())
     n = length(b.ranges)
 
     segments = UnitRange[]
@@ -79,16 +132,12 @@ function optimize_bijector(b::Bijectors.Stacked)
         start_idx = i
     end
 
-    if b.bs isa Tuple
-        segments = tuple(segments...)
-    end
-
     bs = map(segments) do r
         b_r = b.bs[minimum(r)]
         if length(r) > 1 && Bijectors.dimension(b_r) == 0
-            optimize_bijector(Bijectors.up1(b_r))
+            optimize_bijector_structure(Bijectors.up1(b_r))
         else
-            optimize_bijector(b_r)
+            optimize_bijector_structure(b_r)
         end
     end
 
@@ -98,9 +147,11 @@ function optimize_bijector(b::Bijectors.Stacked)
 
     @assert length(bs) == length(ranges) "number of bijectors and ranges is different"
 
-    # Nvm; this actually causes issues for certain bijectors which we can't do `up1` to.
-    # # If we're left with only a single bijector, don't wrap in `Stacked`.
-    # length(bs) == 1 && return optimize_bijector(b.bs[1])
+    # `static_structure` means that we want to tuplify the entire thing.
+    if use_static_structure(options)
+        ranges = tuple(ranges...)
+        bs = tuple(bs...)
+    end
 
     return Bijectors.Stacked(bs, ranges)
 end

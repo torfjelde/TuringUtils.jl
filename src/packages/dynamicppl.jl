@@ -33,8 +33,8 @@ end
 
 Returns the evaluator-type for model `m` or a model-constructor `f`.
 
-(!!!) Does not work well with Revise.jl since redefinition of the model
-will not necessaril trigger a re-evaluation of `evaluatortype`.
+(!!!) If you're using Revise.jl, remember that you might need to re-instaniate
+the model since `evaluatortype` might have changed.
 """
 function evaluatortype(f, argtypes)
     rets = Core.Compiler.return_types(f, argtypes)
