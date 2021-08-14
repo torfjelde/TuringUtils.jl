@@ -1,6 +1,7 @@
 module MCMCChainsUtils
 
 using MCMCChains: MCMCChains
+using DynamicPPL: DynamicPPL
 
 export NamedTupleChainIterator
 
@@ -67,7 +68,7 @@ to produce the correct results for a `chain` with the same parameters as those
 which would have been produced by `model` unless the ordering of the variables is
 also correct.
 """
-setconverters
+setconverters(chain::MCMCChains.Chains, model::DynamicPPL.Model) = chain
 
 #############################
 # `NamedTupleChainIterator` #

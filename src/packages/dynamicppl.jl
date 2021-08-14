@@ -104,7 +104,7 @@ function fast_setval_inner!!(vi::TypedVarInfo, md, val)
 
         if hasindex(val, vn)
             # `_getindex` should be using `view`.
-            vals[r] .= DynamicPPL._getindex(val, vn.indexing)
+            vals[r] .= vec(DynamicPPL._getindex(val, vn.indexing))
             DynamicPPL.settrans!!(vi, false, vn)
         end
     end
@@ -160,7 +160,7 @@ function fast_setval_and_resample_inner!!(vi::TypedVarInfo, md, val)
 
         if hasindex(val, vn)
             # `_getindex` should be using `view`.
-            vals[r] .= DynamicPPL._getindex(val, vn.indexing)
+            vals[r] .= vec(DynamicPPL._getindex(val, vn.indexing))
             DynamicPPL.settrans!!(vi, false, vn)
         else
             # Set to be sampled.
