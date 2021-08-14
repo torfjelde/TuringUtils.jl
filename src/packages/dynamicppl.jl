@@ -5,6 +5,9 @@ using DynamicPPL
 using Random: Random
 using ProgressMeter: ProgressMeter
 
+maybevec(x) = x
+maybevec(x::AbstractArray) = vec(x)
+
 # Convenient overload
 function DynamicPPL.set_flag!!(vi, vns::AbstractVector{<:VarName}, flag)
     new_vi = vi
@@ -104,7 +107,7 @@ function fast_setval_inner!!(vi::TypedVarInfo, md, val)
 
         if hasindex(val, vn)
             # `_getindex` should be using `view`.
-            vals[r] .= vec(DynamicPPL._getindex(val, vn.indexing))
+            vals[r] .= maybevec(DynamicPPL._getindex(val, vn.indexing))
             DynamicPPL.settrans!!(vi, false, vn)
         end
     end
@@ -160,7 +163,7 @@ function fast_setval_and_resample_inner!!(vi::TypedVarInfo, md, val)
 
         if hasindex(val, vn)
             # `_getindex` should be using `view`.
-            vals[r] .= vec(DynamicPPL._getindex(val, vn.indexing))
+            vals[r] .= maybevec(DynamicPPL._getindex(val, vn.indexing))
             DynamicPPL.settrans!!(vi, false, vn)
         else
             # Set to be sampled.
