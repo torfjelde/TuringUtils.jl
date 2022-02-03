@@ -11,57 +11,27 @@ unvectorize_univariates(options::BijectorStructureOptions) = options.unvectorize
 use_static_parameters(options::BijectorStructureOptions) = options.static_parameters
 use_static_structure(options::BijectorStructureOptions) = options.static_structure
 
-
-"""
-    bijector(varinfo::DynamicPPL.VarInfo)
-
-Returns a `NamedBijector` which can transform different variants of `varinfo`.
-
-E.g. `ComponentArrays.ComponentArray(varinfo)`, `namedtuple(varinfo)`.
-"""
-function Bijectors.bijector(varinfo::DynamicPPL.TypedVarInfo; tuplify=false)
-    return Bijectors.bijector(varinfo, BijectorStructureOptions(tuplify, true, false))
-end
-@generated function Bijectors.bijector(
-    varinfo::DynamicPPL.TypedVarInfo,
-    options::BijectorStructureOptions=BijectorStructureOptions()
-)
-    names = Base.names(varinfo)
-    
-    expr = Expr(:tuple)
-    for n in names
-        e = :(bijector_from_metadata(md.$n; options))
-        push!(expr.args, e)
-    end
-
-    return quote
-        md = varinfo.metadata
-        bs = NamedTuple{$names}($expr)
-        return $(Bijectors).NamedBijector(bs)
-    end
+function Bijectors.NamedBijector(model::DynamicPPL.Model)
+    return Bijectors.NamedBijector(DynamicPPL.VarInfo(model))
 end
 
-function bijector_from_metadata(md::DynamicPPL.Metadata; options=BijectorStructureOptions())
+function Bijectors.NamedBijector(varinfo::DynamicPPL.TypedVarInfo)
+    md = varinfo.metadata
+    bs = map(bijector_from_metadata, md)
+    return Bijectors.NamedBijector(bs)
+end
+
+function bijector_from_metadata(md::DynamicPPL.Metadata)
     b = Bijectors.Stacked(map(Bijectors.bijector, md.dists), md.ranges)
-    return if (
-        # Number of dists should be 1 and that should be a univariate.
-        (length(md.dists[1]) == 1 && md.dists[1] isa Bijectors.UnivariateDistribution) &&
-        # Number of bijectors and ranges should be 1.
-        (length(b.bs) == 1 && length(first(b.ranges)) == 1) &&
-        # We only want to unvectorize if it's indeed represented by a symbol,
-        # not some indexing expression, e.g. `x` is cool, `x[1]` is not.
-        (length(md.vns) == 1 && md.vns[1].indexing === ())
-    )
-        first(b.bs)
-    elseif length(md.dists) == 1
-        if Bijectors.dimension(b.bs[1]) == 0
-            Bijectors.up1(b.bs[1])
-        else
-            b.bs[1]
-        end
-    else
-        b
-    end
+    return length(md.dists) == 1 ? first(b.bs) : b
+end
+
+function Bijectors.forward(
+    b::Bijectors.NamedBijector,
+    vi::DynamicPPL.SimpleVarInfo{<:NamedTuple}
+)
+    vals, logjac = Bijectors.forward(b, vi.values)
+    return DynamicPPL.Setfield.@set(vi.values = vals), logjac
 end
 
 function unvectorize_univariate_maybe(md::DynamicPPL.Metadata, b::Bijectors.Stacked)

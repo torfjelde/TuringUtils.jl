@@ -35,18 +35,21 @@ Fast version of [`DynamicPPL.generated_quantities`](@ref) using `NamedTupleChain
 together with [`DynamicPPLUtils.fast_setval_and_resample!!`](@ref) to achieve high performance.
 """
 function fast_generated_quantities(model::DynamicPPL.Model, chain::DynamicPPL.AbstractChains)
-    varinfo = DynamicPPL.VarInfo(model)
     iters = MCMCChainsUtils.NamedTupleChainIterator(
-        keys(varinfo.metadata),
         chain,
         MCMCChainsUtils.getconverters(chain)
     )
 
     pm = ProgressMeter.Progress(length(iters))
 
+    # Construct the `VarInfo` from the model conditioned on an `example`
+    # from `iters`. We're assuming that the model is static.
+    example = first(iters)
+    varinfo = DynamicPPL.VarInfo(DynamicPPL.condition(model, example))
+
     results = map(iters) do nt
-        DynamicPPLUtils.fast_setval_and_resample!!(varinfo, nt)
-        result = model(varinfo)
+        cmodel = model | nt
+        result = cmodel(varinfo)
 
         ProgressMeter.next!(pm)
 
@@ -112,19 +115,23 @@ function fast_transitions_from_chain(
     chain::MCMCChains.Chains;
     sampler=DynamicPPL.SampleFromPrior()
 )
-    varinfo = DynamicPPL.VarInfo(model)
     iters = MCMCChainsUtils.NamedTupleChainIterator(
-        keys(varinfo.metadata),
         chain,
         MCMCChainsUtils.getconverters(chain)
     )
 
     pm = ProgressMeter.Progress(length(iters))
 
+    # Construct the `VarInfo` from the model conditioned on an `example`
+    # from `iters`. We're assuming that the model is static.
+    example = first(iters)
+    varinfo = DynamicPPL.VarInfo(DynamicPPL.condition(model, example))
+
     transitions = map(iters) do nt
-        # Set variables present in `chain` and mark those NOT present in chain to be resampled.
-        DynamicPPLUtils.fast_setval_and_resample!!(varinfo, nt)
-        model(rng, varinfo, sampler)
+        # Condition on variables present in `chain`.
+        cmodel = model | nt
+        cmodel(rng, varinfo, sampler)
+        DynamicPPL.evaluate!!(cmodel, varinfo, DyanmicPPL.SamplingContext())
 
         # Convert `VarInfo` into `NamedTuple` and save.
         theta = DynamicPPL.tonamedtuple(varinfo)
