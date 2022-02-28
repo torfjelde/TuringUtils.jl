@@ -12,9 +12,7 @@ maybevec(x::AbstractArray) = vec(x)
 ############################
 # Simple utility functions #
 ############################
-function replace_args(m::Model; kwargs...)
-    return Model(m.name, m.f, deepcopy(merge(m.args, kwargs)), deepcopy(m.defaults))
-end
+replace_args(m::Model; kwargs...) = Setfield.@set(m.args = deepcopy(merge(m.args, kwargs)))
 
 #############################################
 # Fast `setval!` and `setval_and_resample!` #

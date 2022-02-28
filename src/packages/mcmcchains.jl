@@ -102,7 +102,7 @@ end
         push!(iterators, :(eachslice(nt.$n, dims=$dim)))
     end
 
-    return :((NamedTuple{$names}(x) for x in zip($(iterators...))))
+    return :(Iterators.map(NamedTuple{$names}, zip($(iterators...))))
 end
 
 
