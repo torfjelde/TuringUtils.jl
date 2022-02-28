@@ -93,6 +93,8 @@ function fast_predict(
     # Sample transitions using `spl` conditioned on values in `chain`
     transitions = fast_transitions_from_chain(rng, model, chain_parameters)
 
+    spl = DynamicPPL.SampleFromPrior()
+
     # Let the Turing internals handle everything else for you
     chain_result = reduce(
         MCMCChains.chainscat, [
