@@ -25,6 +25,12 @@ include("packages/dynamicppl.jl")
 include("packages/mcmcchains.jl")
 using .MCMCChainsUtils: NamedTupleChainIterator
 
+function set_all_del!(varinfo::DynamicPPL.VarInfo)
+    for vn in keys(varinfo)
+        DynamicPPL.set_flag!(varinfo, vn, "del")
+    end
+end
+
 #######################################
 # Prediction and generated quantities #
 #######################################
@@ -35,9 +41,12 @@ Fast version of [`DynamicPPL.generated_quantities`](@ref) using `NamedTupleChain
 together with [`DynamicPPLUtils.fast_setval_and_resample!!`](@ref) to achieve high performance.
 """
 function fast_generated_quantities(model::DynamicPPL.Model, chain::DynamicPPL.AbstractChains)
+    # Don't need all the diagnostics
+    chain = MCMCChains.get_sections(chain, :parameters)
+
     iters = MCMCChainsUtils.NamedTupleChainIterator(
-        chain,
-        MCMCChainsUtils.getconverters(chain)
+        chain;
+        MCMCChainsUtils.getconverters(chain)...
     )
 
     pm = ProgressMeter.Progress(length(iters))
@@ -48,8 +57,14 @@ function fast_generated_quantities(model::DynamicPPL.Model, chain::DynamicPPL.Ab
     varinfo = DynamicPPL.VarInfo(DynamicPPL.condition(model, example))
 
     results = map(iters) do nt
+        # Condition on variables present in `chain`.
         cmodel = model | nt
-        result = cmodel(varinfo)
+
+        # Ensure that we're going to resample.
+        set_all_del!(varinfo)
+
+        # Evaluate and capture the result.
+        result = first(DynamicPPL.evaluate!!(cmodel, varinfo, DynamicPPL.SamplingContext()))
 
         ProgressMeter.next!(pm)
 
@@ -75,10 +90,8 @@ function fast_predict(
     # Don't need all the diagnostics
     chain_parameters = MCMCChains.get_sections(chain, :parameters)
 
-    spl = DynamicPPL.SampleFromPrior()
-
     # Sample transitions using `spl` conditioned on values in `chain`
-    transitions = fast_transitions_from_chain(rng, model, chain_parameters; sampler = spl)
+    transitions = fast_transitions_from_chain(rng, model, chain_parameters)
 
     # Let the Turing internals handle everything else for you
     chain_result = reduce(
@@ -113,11 +126,10 @@ function fast_transitions_from_chain(
     rng::Random.AbstractRNG,
     model::DynamicPPL.Model,
     chain::MCMCChains.Chains;
-    sampler=DynamicPPL.SampleFromPrior()
 )
     iters = MCMCChainsUtils.NamedTupleChainIterator(
-        chain,
-        MCMCChainsUtils.getconverters(chain)
+        chain;
+        MCMCChainsUtils.getconverters(chain)...
     )
 
     pm = ProgressMeter.Progress(length(iters))
@@ -130,8 +142,12 @@ function fast_transitions_from_chain(
     transitions = map(iters) do nt
         # Condition on variables present in `chain`.
         cmodel = model | nt
-        cmodel(rng, varinfo, sampler)
-        DynamicPPL.evaluate!!(cmodel, varinfo, DyanmicPPL.SamplingContext())
+
+        # Ensure that we're going to resample.
+        set_all_del!(varinfo)
+
+        # Evaluate.
+        DynamicPPL.evaluate!!(cmodel, varinfo, DynamicPPL.SamplingContext())
 
         # Convert `VarInfo` into `NamedTuple` and save.
         theta = DynamicPPL.tonamedtuple(varinfo)
