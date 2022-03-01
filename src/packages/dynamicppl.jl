@@ -131,4 +131,13 @@ function fast_setval_and_resample_inner!!(vi::TypedVarInfo, md, val)
     return vi
 end
 
+# Hotfix for https://github.com/TuringLang/DynamicPPL.jl/issues/386.
+# Overload "empty" `TypedVarInfo`.
+function Base.eltype(
+    vi::DynamicPPL.VarInfo{NamedTuple{(),Tuple{}}},
+    spl::Union{DynamicPPL.AbstractSampler,DynamicPPL.SampleFromPrior}
+)
+    return eltype(DynamicPPL.getlogp(vi))
+end
+
 end
